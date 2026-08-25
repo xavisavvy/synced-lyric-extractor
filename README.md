@@ -17,7 +17,10 @@ Load a song and a list of lyric/marker lines, tap along in time with the beat, a
 - **Embedded lyrics detection** — if the mp3's ID3v2 tag already has `USLT` (plain lyrics) or `SYLT` (pre-synced lyrics) frames, the app offers to load them automatically, editable before you proceed.
 - **Adjustable playback speed** and 1s/5s rewind, for tricky sections.
 - **Autosave** — lyrics and tagged timestamps are saved to `localStorage` as you go, so a reload won't lose your progress (you'll just need to re-pick the audio file).
-- **Copy or download** the final timecoded text.
+- **Undo/redo history** — Ctrl+Z / Ctrl+Shift+Z step back and forward through your last 25 taps, undos, and inserted lines.
+- **Insert a missed line** inline, and **Reset / edit lyrics** without losing already-tagged timestamps for lines you don't touch.
+- **Fullscreen lyric view** — a karaoke-style preview with the embedded cover art (if the file has one) on one side and the lyrics animating in sync on the other; falls back to an animated equalizer when there's no art, and tints itself from the art's dominant color.
+- **Copy, download, or export a Storyboarder project** (`.zip`, ready to open in [Storyboarder](https://wonderunit.com/storyboarder/)) from the tagged result.
 
 ## Prerequisites
 

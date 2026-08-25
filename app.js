@@ -54,6 +54,27 @@
   const loadUsltBtn = document.getElementById('load-uslt-btn');
   const loadSyltBtn = document.getElementById('load-sylt-btn');
   let detectedLyrics = null; // { uslt: string[], sylt: {...}[], usableSylt: {...}[] } | null
+  let coverArtUrl = null; // object URL for embedded cover art (APIC/PIC frame), if any
+  let trackTitle = null;  // from ID3 TIT2/TT2, if present
+  let trackArtist = null; // from ID3 TPE1/TP1, if present
+
+  // ---- elements: fullscreen lyric video ----
+  const openLyricVideoBtn = document.getElementById('open-lyric-video-btn');
+  const lyricVideoOverlay = document.getElementById('lyric-video-overlay');
+  const closeLyricVideoBtn = document.getElementById('close-lyric-video-btn');
+  const lyricVideoCoverImg = document.getElementById('lyric-video-cover-img');
+  const lyricVideoArtFallback = document.getElementById('lyric-video-art-fallback');
+  const lyricVideoArt = document.getElementById('lyric-video-art');
+  const lyricVideoLyrics = document.getElementById('lyric-video-lyrics');
+  const lvPlayBtn = document.getElementById('lv-play-btn');
+  const lvSeek = document.getElementById('lv-seek');
+  const lvTimeCurrent = document.getElementById('lv-time-current');
+  const lvTimeTotal = document.getElementById('lv-time-total');
+  const lyricVideoTitleEl = document.getElementById('lyric-video-title');
+  const lyricVideoArtistEl = document.getElementById('lyric-video-artist');
+  let lyricVideoOpen = false;
+  let lyricVideoLines = []; // tagged lines, sorted by time, currently rendered in the overlay
+  let isDraggingLvSeek = false;
 
   // ---------------------------------------------------------------------
   // time formatting: "MM:SS.mmm" matching the requested output style
@@ -155,6 +176,37 @@
     return { timestampFormat, contentType, entries };
   }
 
+  function parseTextFrame(bytes) {
+    const encoding = bytes[0];
+    const text = decodeId3Text(bytes.subarray(1), encoding);
+    return text.split('\u0000')[0].trim();
+  }
+
+  function parseApicFrame(bytes, majorVersion) {
+    const encoding = bytes[0];
+    let pos = 1;
+    let mimeType;
+    if (majorVersion === 2) {
+      const fmt = String.fromCharCode(bytes[1], bytes[2], bytes[3]).toUpperCase();
+      mimeType = fmt === 'PNG' ? 'image/png' : 'image/jpeg';
+      pos = 4;
+    } else {
+      const mimeEnd = findId3Terminator(bytes, pos, 0);
+      mimeType = decodeId3Text(bytes.subarray(pos, mimeEnd), 0);
+      pos = mimeEnd + 1;
+    }
+    // skip "-->" (linked/URL image) and anything not a recognizable image type —
+    // we never want to fetch an external URL to display art
+    if (!mimeType || mimeType.indexOf('image/') !== 0) return null;
+    const pictureType = bytes[pos];
+    pos += 1;
+    const descEnd = findId3Terminator(bytes, pos, encoding);
+    pos = descEnd + (encoding === 1 || encoding === 2 ? 2 : 1);
+    const imageBytes = bytes.subarray(pos);
+    if (imageBytes.length < 8) return null;
+    return { mimeType, pictureType, bytes: imageBytes };
+  }
+
   async function extractId3Lyrics(file) {
     try {
       const headerBytes = new Uint8Array(await file.slice(0, 10).arrayBuffer());
@@ -178,6 +230,9 @@
       const frameHeaderLen = majorVersion === 2 ? 6 : 10;
       const uslt = [];
       const sylt = [];
+      let coverArt = null;
+      let title = null;
+      let artist = null;
 
       while (offset + frameHeaderLen <= bytes.length) {
         const id = String.fromCharCode(...bytes.subarray(offset, offset + idLen));
@@ -202,6 +257,16 @@
           } else if (id === 'SYLT' || id === 'SLT') {
             const parsed = parseSyltFrame(frameBytes);
             if (parsed.entries.length) sylt.push(parsed);
+          } else if (id === 'APIC' || id === 'PIC') {
+            const art = parseApicFrame(frameBytes, majorVersion);
+            // prefer an explicit "front cover" (type 3) over whatever we saw first
+            if (art && (!coverArt || art.pictureType === 3)) coverArt = art;
+          } else if (id === 'TIT2' || id === 'TT2') {
+            const t = parseTextFrame(frameBytes);
+            if (t) title = t;
+          } else if (id === 'TPE1' || id === 'TP1') {
+            const a = parseTextFrame(frameBytes);
+            if (a) artist = a;
           }
         } catch (e) {
           // one malformed frame shouldn't abort the whole scan
@@ -210,9 +275,9 @@
         offset = frameDataEnd;
       }
 
-      if (uslt.length === 0 && sylt.length === 0) return null;
+      if (uslt.length === 0 && sylt.length === 0 && !coverArt && !title && !artist) return null;
       const usableSylt = sylt.filter((s) => s.timestampFormat === 2 && s.contentType <= 2);
-      return { uslt, sylt, usableSylt };
+      return { uslt, sylt, usableSylt, coverArt, title, artist };
     } catch (e) {
       return null; // tag parsing must never break the rest of the app
     }
@@ -279,11 +344,19 @@
 
     detectedLyrics = null;
     id3Panel.style.display = 'none';
+    if (coverArtUrl) { URL.revokeObjectURL(coverArtUrl); coverArtUrl = null; }
+    trackTitle = null;
+    trackArtist = null;
     extractId3Lyrics(file).then((result) => {
       // ignore a stale result if the user already picked a different file
       if (audioInput.files[0] !== file || !result) return;
       detectedLyrics = result;
       showDetectedLyricsPanel(result);
+      if (result.coverArt) {
+        coverArtUrl = URL.createObjectURL(new Blob([result.coverArt.bytes], { type: result.coverArt.mimeType }));
+      }
+      trackTitle = result.title;
+      trackArtist = result.artist;
     });
   });
 
@@ -628,6 +701,7 @@
 
   function shouldHandleSyncKey(e) {
     if (syncView.style.display === 'none') return false;
+    if (lyricVideoOpen) return false; // the lyric-video overlay owns keyboard input while open
     if (!SYNC_KEY_CODES.has(e.code)) return false;
     const tag = document.activeElement ? document.activeElement.tagName : '';
     return !(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
@@ -911,4 +985,184 @@
       exportStoryboarderBtn.textContent = originalLabel;
     }
   });
+
+  // ---------------------------------------------------------------------
+  // Fullscreen lyric video: watch the track with the lyrics animating in
+  // sync, cover art (if the file has any) on one side, karaoke-style.
+  // ---------------------------------------------------------------------
+  function getTaggedLinesSorted() {
+    return lines.filter((l) => l.time !== null).slice().sort((a, b) => a.time - b.time);
+  }
+
+  function formatClock(totalSeconds) {
+    if (!Number.isFinite(totalSeconds)) return '00:00';
+    const s = Math.max(0, Math.floor(totalSeconds));
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  }
+
+  // Average the (opaque) pixels of a small downscaled copy of the art to get
+  // a representative color, used to tint the overlay's background/glow so
+  // it feels themed to the track rather than generically dark.
+  function extractDominantColor(imgEl) {
+    try {
+      const size = 24;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgEl, 0, 0, size, size);
+      const { data } = ctx.getImageData(0, 0, size, size);
+      let r = 0, g = 0, b = 0, count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 200) continue; // skip transparent pixels
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        count++;
+      }
+      if (!count) return null;
+      return `rgb(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)})`;
+    } catch (e) {
+      return null; // never let a color-tint failure break the viewer
+    }
+  }
+
+  function renderLyricVideoLyrics() {
+    lyricVideoLines = getTaggedLinesSorted();
+    lyricVideoLyrics.innerHTML = '';
+    lyricVideoLines.forEach((line) => {
+      const div = document.createElement('div');
+      div.className = 'lv-line';
+      div.textContent = line.text;
+      lyricVideoLyrics.appendChild(div);
+    });
+  }
+
+  function updateLyricVideoActiveLine() {
+    if (!lyricVideoLines.length) return;
+    const t = syncAudio.currentTime;
+    let activeIdx = -1;
+    for (let i = 0; i < lyricVideoLines.length; i++) {
+      if (lyricVideoLines[i].time <= t) activeIdx = i;
+      else break;
+    }
+    const children = lyricVideoLyrics.children;
+    for (let i = 0; i < children.length; i++) {
+      children[i].classList.toggle('lv-current', i === activeIdx);
+      children[i].classList.toggle('lv-past', i < activeIdx);
+    }
+    if (activeIdx >= 0 && children[activeIdx]) {
+      children[activeIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function updateLvPlayIcon() {
+    lvPlayBtn.innerHTML = syncAudio.paused ? '&#9654;' : '&#10074;&#10074;';
+  }
+
+  function openLyricVideo() {
+    const tagged = getTaggedLinesSorted();
+    if (tagged.length === 0) {
+      alert('Tag at least one line before opening the lyric view.');
+      return;
+    }
+    renderLyricVideoLyrics();
+
+    if (coverArtUrl) {
+      lyricVideoCoverImg.src = coverArtUrl;
+      lyricVideoCoverImg.style.display = 'block';
+      lyricVideoArtFallback.style.display = 'none';
+      lyricVideoCoverImg.onload = () => {
+        const tint = extractDominantColor(lyricVideoCoverImg);
+        lyricVideoOverlay.style.setProperty('--lv-tint', tint || '#7c9bff');
+      };
+    } else {
+      lyricVideoCoverImg.style.display = 'none';
+      lyricVideoArtFallback.style.display = 'flex';
+      lyricVideoOverlay.style.setProperty('--lv-tint', '#7c9bff');
+    }
+
+    const file = audioInput.files[0];
+    lyricVideoTitleEl.textContent = trackTitle || (file ? file.name.replace(/\.[^.]+$/, '') : 'Untitled');
+    lyricVideoArtistEl.textContent = trackArtist || '';
+    lyricVideoArtistEl.style.display = trackArtist ? 'block' : 'none';
+
+    const dur = syncAudio.duration;
+    lvSeek.max = String(Number.isFinite(dur) ? Math.round(dur * 1000) : 1000);
+    lvTimeTotal.textContent = formatClock(dur);
+    lvSeek.value = String(Math.round(syncAudio.currentTime * 1000));
+    lvTimeCurrent.textContent = formatClock(syncAudio.currentTime);
+    updateLvPlayIcon();
+    updateLyricVideoActiveLine();
+
+    lyricVideoOverlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    lyricVideoOpen = true;
+  }
+
+  function closeLyricVideo() {
+    lyricVideoOverlay.style.display = 'none';
+    document.body.style.overflow = '';
+    lyricVideoOpen = false;
+    syncAudio.pause();
+  }
+
+  openLyricVideoBtn.addEventListener('click', openLyricVideo);
+  closeLyricVideoBtn.addEventListener('click', closeLyricVideo);
+  lyricVideoOverlay.addEventListener('click', (e) => {
+    if (e.target === lyricVideoOverlay) closeLyricVideo();
+  });
+
+  lvPlayBtn.addEventListener('click', () => {
+    if (syncAudio.paused) syncAudio.play(); else syncAudio.pause();
+  });
+
+  lvSeek.addEventListener('input', () => {
+    isDraggingLvSeek = true;
+    const t = parseFloat(lvSeek.value) / 1000;
+    syncAudio.currentTime = t;
+    lvTimeCurrent.textContent = formatClock(t);
+    updateLyricVideoActiveLine();
+  });
+  lvSeek.addEventListener('change', () => {
+    isDraggingLvSeek = false;
+  });
+
+  syncAudio.addEventListener('play', () => {
+    updateLvPlayIcon();
+    lyricVideoArt.classList.add('is-playing');
+    lyricVideoArtFallback.classList.add('is-playing');
+  });
+  syncAudio.addEventListener('pause', () => {
+    updateLvPlayIcon();
+    lyricVideoArt.classList.remove('is-playing');
+    lyricVideoArtFallback.classList.remove('is-playing');
+  });
+  syncAudio.addEventListener('timeupdate', () => {
+    if (!lyricVideoOpen) return;
+    if (!isDraggingLvSeek) lvSeek.value = String(Math.round(syncAudio.currentTime * 1000));
+    lvTimeCurrent.textContent = formatClock(syncAudio.currentTime);
+    updateLyricVideoActiveLine();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!lyricVideoOpen) return;
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      closeLyricVideo();
+    } else if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (syncAudio.paused) syncAudio.play(); else syncAudio.pause();
+    }
+  }, true);
+  document.addEventListener('keyup', (e) => {
+    if (!lyricVideoOpen) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
 })();

@@ -88,6 +88,7 @@
 
       <div class="panel actions-panel">
         <button id="reset-btn" class="btn danger">Reset / edit lyrics</button>
+        <button id="open-lyric-video-btn" class="btn secondary">🎬 Fullscreen lyric view</button>
       </div>
     </section>
 
@@ -109,6 +110,31 @@
     <footer class="site-footer">
       Made with ❤️ by <a href="https://prestonfarr.com" target="_blank" rel="noopener noreferrer">Preston Farr</a>
     </footer>
+  </div>
+
+  <div id="lyric-video-overlay" class="lyric-video-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Fullscreen lyric view">
+    <button id="close-lyric-video-btn" class="lyric-video-close" title="Close (Esc)" aria-label="Close">&times;</button>
+    <div class="lyric-video-stage">
+      <div class="lyric-video-art-col">
+        <div class="lyric-video-art" id="lyric-video-art">
+          <img id="lyric-video-cover-img" class="lyric-video-cover-img" alt="" style="display:none;" />
+          <div class="lyric-video-art-fallback" id="lyric-video-art-fallback">
+            <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+          </div>
+        </div>
+        <div class="lyric-video-meta">
+          <div id="lyric-video-title" class="lyric-video-title">&nbsp;</div>
+          <div id="lyric-video-artist" class="lyric-video-artist">&nbsp;</div>
+        </div>
+      </div>
+      <div class="lyric-video-lyrics" id="lyric-video-lyrics"></div>
+    </div>
+    <div class="lyric-video-controls">
+      <button id="lv-play-btn" class="lv-control-btn" title="Play/Pause (Space)" aria-label="Play/Pause">&#9654;</button>
+      <span id="lv-time-current" class="lv-time">00:00</span>
+      <input id="lv-seek" class="lv-seek" type="range" min="0" max="1000" value="0" step="1" />
+      <span id="lv-time-total" class="lv-time">00:00</span>
+    </div>
   </div>
 
   <script src="app.js"></script>
