@@ -7,6 +7,8 @@
   let lines = [];        // [{ text, time }]  time = seconds|null
   let pointer = 0;       // index of the "next line to tag"
   let audioObjectUrl = null;
+  let audioFileHint = null;   // { name, size } of the file the current session was tagged against
+  let pendingResumeHint = null; // set after "Resume previous session", checked against the next file picked
 
   // ---- elements: setup view ----
   const audioInput = document.getElementById('audio-input');
@@ -240,6 +242,9 @@
     const entries = detectedLyrics.usableSylt[0].entries;
     lines = entries.map((e) => ({ text: e.text, time: e.timeMs / 1000 }));
     pointer = lines.length;
+    const file = audioInput.files[0];
+    audioFileHint = file ? { name: file.name, size: file.size } : null;
+    pendingResumeHint = null;
     lyricsInput.value = lines.map((l) => l.text).join('\n');
     syncAudio.src = audioObjectUrl;
     enterSyncView();
@@ -258,6 +263,13 @@
     previewAudio.style.display = 'block';
     audioFilename.textContent = file.name;
     updateStartButton();
+
+    if (pendingResumeHint) {
+      const mismatched = pendingResumeHint.name !== file.name || pendingResumeHint.size !== file.size;
+      setupError.textContent = mismatched
+        ? `Heads up: this doesn't look like the same file this session was tagged against (expected "${pendingResumeHint.name}"). Timestamps may not line up.`
+        : '';
+    }
 
     detectedLyrics = null;
     id3Panel.style.display = 'none';
@@ -310,6 +322,8 @@
     }
     lines = parsedLines.map(text => ({ text, time: null }));
     pointer = 0;
+    audioFileHint = { name: file.name, size: file.size };
+    pendingResumeHint = null;
     syncAudio.src = audioObjectUrl;
     enterSyncView();
     saveSession();
@@ -320,8 +334,11 @@
     if (!saved) return;
     lines = saved.lines;
     pointer = saved.pointer;
+    pendingResumeHint = saved.audioFileHint || null;
     lyricsInput.value = lines.map(l => l.text).join('\n');
-    setupError.textContent = 'Session restored — choose the same audio file again, then click "Start syncing".';
+    setupError.textContent = pendingResumeHint
+      ? `Session restored — choose "${pendingResumeHint.name}" again, then click "Start syncing".`
+      : 'Session restored — choose the same audio file again, then click "Start syncing".';
     resumeBtn.style.display = 'none';
   });
 
@@ -331,7 +348,7 @@
   // ---------------------------------------------------------------------
   function saveSession() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ lines, pointer }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ lines, pointer, audioFileHint }));
     } catch (e) { /* storage unavailable, ignore */ }
   }
 
