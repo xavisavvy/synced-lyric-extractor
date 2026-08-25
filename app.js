@@ -10,6 +10,11 @@
   let audioFileHint = null;   // { name, size } of the file the current session was tagged against
   let pendingResumeHint = null; // set after "Resume previous session", checked against the next file picked
 
+  // ---- undo/redo history (Ctrl+Z / Ctrl+Shift+Z) ----
+  const MAX_HISTORY = 25;
+  let undoStack = [];
+  let redoStack = [];
+
   // ---- elements: setup view ----
   const audioInput = document.getElementById('audio-input');
   const audioFilename = document.getElementById('audio-filename');
@@ -415,6 +420,8 @@
     setupView.style.display = 'none';
     syncView.style.display = 'block';
     exportPanel.style.display = 'block';
+    undoStack = [];
+    redoStack = [];
     renderLines();
     updateCurrentLineDisplay();
     renderExport();
@@ -461,8 +468,51 @@
   tapBtn.addEventListener('click', tapCurrentLine);
   undoBtn.addEventListener('click', undoLastTap);
 
+  // Snapshot-based undo/redo (Ctrl+Z / Ctrl+Shift+Z) covering the last
+  // MAX_HISTORY tap/undo/insert actions. Storing full {lines, pointer}
+  // snapshots rather than reversing each action individually keeps every
+  // action type (tap, the Backspace undo, inserting a missed line) trivially
+  // and correctly undoable/redoable without teaching the history system how
+  // to invert each one.
+  function cloneLines(arr) {
+    return arr.map((l) => ({ text: l.text, time: l.time }));
+  }
+
+  function pushHistory() {
+    undoStack.push({ lines: cloneLines(lines), pointer });
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = []; // a fresh action invalidates whatever redo timeline existed
+  }
+
+  function undoHistory() {
+    if (undoStack.length === 0) return;
+    const prev = undoStack.pop();
+    redoStack.push({ lines: cloneLines(lines), pointer });
+    if (redoStack.length > MAX_HISTORY) redoStack.shift();
+    lines = prev.lines;
+    pointer = prev.pointer;
+    renderLines();
+    updateCurrentLineDisplay();
+    renderExport();
+    saveSession();
+  }
+
+  function redoHistory() {
+    if (redoStack.length === 0) return;
+    const next = redoStack.pop();
+    undoStack.push({ lines: cloneLines(lines), pointer });
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    lines = next.lines;
+    pointer = next.pointer;
+    renderLines();
+    updateCurrentLineDisplay();
+    renderExport();
+    saveSession();
+  }
+
   function tapCurrentLine() {
     if (pointer >= lines.length) return;
+    pushHistory();
     lines[pointer].time = syncAudio.currentTime;
     pointer = Math.min(pointer + 1, lines.length);
     renderLines();
@@ -475,13 +525,14 @@
     // If the pointer is currently sitting on an already-tagged line (e.g. the
     // user jumped back to re-tag it), clear that one in place. Otherwise fall
     // back to stepping back to the previous line and clearing it.
-    if (pointer < lines.length && lines[pointer].time !== null) {
-      lines[pointer].time = null;
-    } else if (pointer > 0) {
-      pointer -= 1;
+    const canClearCurrent = pointer < lines.length && lines[pointer].time !== null;
+    if (!canClearCurrent && pointer <= 0) return;
+    pushHistory();
+    if (canClearCurrent) {
       lines[pointer].time = null;
     } else {
-      return;
+      pointer -= 1;
+      lines[pointer].time = null;
     }
     renderLines();
     updateCurrentLineDisplay();
@@ -522,6 +573,7 @@
     if (text === null) return; // cancelled
     const trimmed = text.trim();
     if (!trimmed) return;
+    pushHistory();
     lines.splice(index + 1, 0, { text: trimmed, time: null });
     if (pointer > index) pointer += 1;
     renderLines();
@@ -572,7 +624,7 @@
   // work again after clicking elsewhere on the page. Capturing first, and
   // stopping propagation ourselves, means the native control never sees it.
   // ---------------------------------------------------------------------
-  const SYNC_KEY_CODES = new Set(['Space', 'Backspace', 'ArrowLeft', 'ArrowRight', 'KeyP']);
+  const SYNC_KEY_CODES = new Set(['Space', 'Backspace', 'ArrowLeft', 'ArrowRight', 'KeyP', 'KeyZ', 'KeyY']);
 
   function shouldHandleSyncKey(e) {
     if (syncView.style.display === 'none') return false;
@@ -583,6 +635,12 @@
 
   document.addEventListener('keydown', (e) => {
     if (!shouldHandleSyncKey(e)) return;
+
+    const isUndoCombo = e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && !e.shiftKey;
+    const isRedoCombo = (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && e.shiftKey) || (e.code === 'KeyY' && (e.ctrlKey || e.metaKey));
+    // A bare "z"/"y" (no Ctrl/Cmd) isn't one of our shortcuts — leave it alone.
+    if ((e.code === 'KeyZ' || e.code === 'KeyY') && !isUndoCombo && !isRedoCombo) return;
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -596,6 +654,10 @@
       seekBy(1);
     } else if (e.code === 'KeyP') {
       if (syncAudio.paused) syncAudio.play(); else syncAudio.pause();
+    } else if (isUndoCombo) {
+      undoHistory();
+    } else if (isRedoCombo) {
+      redoHistory();
     }
   }, true);
 
@@ -604,6 +666,7 @@
   // so blocking only keydown isn't enough to stop it from toggling playback.
   document.addEventListener('keyup', (e) => {
     if (!shouldHandleSyncKey(e)) return;
+    if ((e.code === 'KeyZ' || e.code === 'KeyY') && !(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     e.stopPropagation();
   }, true);
