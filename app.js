@@ -491,6 +491,9 @@
 
   function jumpToLine(index) {
     pointer = index;
+    if (lines[index].time !== null) {
+      syncAudio.currentTime = lines[index].time;
+    }
     updateCurrentLineDisplay();
     renderLines();
   }
