@@ -41,6 +41,7 @@
   const copyBtn = document.getElementById('copy-btn');
   const downloadBtn = document.getElementById('download-btn');
   const copyStatus = document.getElementById('copy-status');
+  const exportStoryboarderBtn = document.getElementById('export-storyboarder-btn');
 
   // ---- elements: embedded (ID3) lyrics detection ----
   const id3Panel = document.getElementById('id3-lyrics-panel');
@@ -630,5 +631,208 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  });
+
+  // ---------------------------------------------------------------------
+  // Storyboarder (wonderunit/storyboarder) project export.
+  //
+  // A .storyboarder project is a JSON file plus a sibling images/ folder
+  // holding a real PNG per board (board-{n}-{uid}.png) — the schema and an
+  // official example project were checked directly against
+  // github.com/wonderunit/storyboarder to get field names/types right.
+  // Since we have no artwork, each board gets a blank placeholder PNG so the
+  // project opens cleanly with nothing missing; the lyric line becomes both
+  // the board's dialogue and notes, timed/duration-matched from the taps.
+  // ---------------------------------------------------------------------
+  const ZIP_CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) crc = ZIP_CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function toDosDateTime(date) {
+    const dosTime = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | ((date.getSeconds() >> 1) & 0x1f);
+    const dosDate = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0xf) << 5) | (date.getDate() & 0x1f);
+    return { dosTime, dosDate };
+  }
+
+  // Minimal "store" (uncompressed) ZIP writer — no third-party dependency,
+  // readable by any standard unzip tool. No compression needed for a handful
+  // of small placeholder PNGs and one JSON file.
+  function buildZip(entries) {
+    const encoder = new TextEncoder();
+    const { dosTime, dosDate } = toDosDateTime(new Date());
+    const fileParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    for (const entry of entries) {
+      const nameBytes = encoder.encode(entry.name);
+      const data = entry.data;
+      const crc = crc32(data);
+      const size = data.length;
+
+      const local = new Uint8Array(30 + nameBytes.length);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true);
+      lv.setUint16(4, 20, true);
+      lv.setUint16(6, 0, true);
+      lv.setUint16(8, 0, true); // compression: store
+      lv.setUint16(10, dosTime, true);
+      lv.setUint16(12, dosDate, true);
+      lv.setUint32(14, crc, true);
+      lv.setUint32(18, size, true);
+      lv.setUint32(22, size, true);
+      lv.setUint16(26, nameBytes.length, true);
+      lv.setUint16(28, 0, true);
+      local.set(nameBytes, 30);
+      fileParts.push(local, data);
+
+      const central = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, dosTime, true);
+      cv.setUint16(14, dosDate, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, size, true);
+      cv.setUint32(24, size, true);
+      cv.setUint16(28, nameBytes.length, true);
+      cv.setUint16(30, 0, true);
+      cv.setUint16(32, 0, true);
+      cv.setUint16(34, 0, true);
+      cv.setUint16(36, 0, true);
+      cv.setUint32(38, 0, true);
+      cv.setUint32(42, offset, true);
+      central.set(nameBytes, 46);
+      centralParts.push(central);
+
+      offset += local.length + data.length;
+    }
+
+    const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+    const centralOffset = offset;
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, entries.length, true);
+    ev.setUint16(10, entries.length, true);
+    ev.setUint32(12, centralSize, true);
+    ev.setUint32(16, centralOffset, true);
+
+    return new Blob([...fileParts, ...centralParts, eocd], { type: 'application/zip' });
+  }
+
+  function makeBlankBoardPng(width, height) {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = Math.max(2, Math.round(width * 0.003));
+      ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, width - ctx.lineWidth, height - ctx.lineWidth);
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('canvas.toBlob failed')); return; }
+        blob.arrayBuffer().then((buf) => resolve(new Uint8Array(buf))).catch(reject);
+      }, 'image/png');
+    });
+  }
+
+  function randomBoardUid(used) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let uid;
+    do {
+      uid = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    } while (used.has(uid));
+    used.add(uid);
+    return uid;
+  }
+
+  exportStoryboarderBtn.addEventListener('click', async () => {
+    const tagged = lines.filter((l) => l.time !== null).slice().sort((a, b) => a.time - b.time);
+    if (tagged.length === 0) {
+      alert('Tag at least one line before exporting a Storyboarder project.');
+      return;
+    }
+
+    const originalLabel = exportStoryboarderBtn.textContent;
+    exportStoryboarderBtn.disabled = true;
+    exportStoryboarderBtn.textContent = 'Building…';
+    try {
+      const file = audioInput.files[0];
+      const baseName = file ? file.name.replace(/\.[^.]+$/, '') : 'storyboard';
+      const slug = baseName.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'storyboard';
+
+      const usedUids = new Set();
+      const totalDuration = Number.isFinite(syncAudio.duration) ? syncAudio.duration : null;
+
+      const boards = tagged.map((line, i) => {
+        const uid = randomBoardUid(usedUids);
+        const timeMs = Math.round(line.time * 1000);
+        const nextTimeMs = i + 1 < tagged.length ? Math.round(tagged[i + 1].time * 1000) : null;
+        const durationMs =
+          nextTimeMs !== null
+            ? Math.max(200, nextTimeMs - timeMs)
+            : totalDuration !== null
+              ? Math.max(200, Math.round((totalDuration - line.time) * 1000))
+              : 2000;
+        return {
+          uid,
+          url: `board-${i + 1}-${uid}.png`,
+          newShot: true,
+          lastEdited: Date.now(),
+          number: i + 1,
+          shot: String(i + 1),
+          time: timeMs,
+          duration: durationMs,
+          dialogue: line.text,
+          notes: line.text,
+          lineMileage: 0,
+        };
+      });
+
+      const project = {
+        version: '0.8.0',
+        aspectRatio: 1.7777778,
+        fps: 24,
+        defaultBoardTiming: '2000',
+        boards,
+      };
+
+      const blankPng = await makeBlankBoardPng(1600, 900);
+      const entries = [
+        { name: `${slug}/${slug}.storyboarder`, data: new TextEncoder().encode(JSON.stringify(project, null, 2)) },
+        ...boards.map((b) => ({ name: `${slug}/images/${b.url}`, data: blankPng })),
+      ];
+      const zipBlob = buildZip(entries);
+
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${slug}-storyboarder.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      exportStoryboarderBtn.disabled = false;
+      exportStoryboarderBtn.textContent = originalLabel;
+    }
   });
 })();
