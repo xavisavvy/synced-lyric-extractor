@@ -19,11 +19,13 @@ Load a song and a list of lyric/marker lines, tap along in time with the beat, a
 - **Autosave** — lyrics and tagged timestamps are saved to `localStorage` as you go, so a reload won't lose your progress (you'll just need to re-pick the audio file).
 - **Copy or download** the final timecoded text.
 
+## Prerequisites
+
+None to just open the app — it's plain HTML/CSS/JS with no build step and no dependencies. **Python is only needed if you want to serve the folder over `http://` instead of opening the file directly** (some browsers restrict certain behavior on `file://` pages); the example below uses Python 3's built-in server since it's commonly preinstalled, but any static file server works (e.g. `npx serve`, which needs Node.js instead).
+
 ## Usage
 
-No build step, no install, no server required.
-
-1. Open [`index.html`](index.html) directly in a browser, **or** serve the folder with any static file server, e.g.:
+1. Open [`index.html`](index.html) directly in a browser, **or** serve the folder with a local static server if you'd rather use `http://`, e.g.:
 
    ```bash
    python -m http.server 8420
