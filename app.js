@@ -306,6 +306,43 @@
     setupError.textContent = '';
   }
 
+  // Reconcile freshly-parsed lyric lines against whatever `lines` already
+  // holds (e.g. from before a "Reset / edit lyrics") using an LCS-style diff
+  // over line text: lines whose text is unchanged, in the same relative
+  // order, keep their tagged time; anything added, removed, or edited comes
+  // back as an untagged line rather than wiping every timestamp.
+  function reconcileLines(oldLines, newTexts) {
+    const oldTexts = oldLines.map((l) => l.text);
+    const n = oldTexts.length;
+    const m = newTexts.length;
+    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = oldTexts[i] === newTexts[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const result = [];
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (oldTexts[i] === newTexts[j] && dp[i][j] === dp[i + 1][j + 1] + 1) {
+        result.push({ text: newTexts[j], time: oldLines[i].time });
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        i++; // old line dropped
+      } else {
+        result.push({ text: newTexts[j], time: null }); // new/edited line
+        j++;
+      }
+    }
+    while (j < m) {
+      result.push({ text: newTexts[j], time: null });
+      j++;
+    }
+    return result;
+  }
+
   startSyncBtn.addEventListener('click', () => {
     const file = audioInput.files[0];
     if (!file) {
@@ -320,8 +357,9 @@
       setupError.textContent = 'Add at least one lyric/marker line.';
       return;
     }
-    lines = parsedLines.map(text => ({ text, time: null }));
-    pointer = 0;
+    lines = reconcileLines(lines, parsedLines);
+    pointer = lines.findIndex((l) => l.time === null);
+    if (pointer === -1) pointer = lines.length;
     audioFileHint = { name: file.name, size: file.size };
     pendingResumeHint = null;
     syncAudio.src = audioObjectUrl;
@@ -390,7 +428,7 @@
   }
 
   resetBtn.addEventListener('click', () => {
-    if (!confirm('This clears all tagged timestamps and returns to lyric editing. Continue?')) return;
+    if (!confirm('This returns to lyric editing. Lines you don\'t change keep their tagged timestamps; anything you add, remove, or edit will need (re)tagging. Continue?')) return;
     exitToSetup();
   });
 
