@@ -448,7 +448,10 @@
 
   function updateCurrentLineDisplay() {
     if (pointer >= lines.length) {
-      currentLineText.textContent = 'All lines tagged — check the export below.';
+      const untaggedCount = lines.filter((l) => l.time === null).length;
+      currentLineText.textContent = untaggedCount > 0
+        ? `${untaggedCount} line(s) above still need tagging — click one to jump there.`
+        : 'All lines tagged — check the export below.';
       tapBtn.disabled = true;
     } else {
       currentLineText.textContent = lines[pointer].text;
@@ -456,6 +459,23 @@
     }
     const currentLineIsTagged = pointer < lines.length && lines[pointer].time !== null;
     undoBtn.disabled = !(currentLineIsTagged || pointer > 0);
+  }
+
+  // Insert a missed/repeated line right after `index` without touching any
+  // other line's text or timestamp — so realizing mid-sync that a line was
+  // left out of the list doesn't mean re-tagging everything from scratch.
+  function insertLineAfter(index) {
+    const refText = lines[index].text;
+    const text = prompt(`Insert a new line after "${refText}":`, '');
+    if (text === null) return; // cancelled
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    lines.splice(index + 1, 0, { text: trimmed, time: null });
+    if (pointer > index) pointer += 1;
+    renderLines();
+    updateCurrentLineDisplay();
+    renderExport();
+    saveSession();
   }
 
   function renderLines() {
@@ -469,8 +489,18 @@
       const text = document.createElement('span');
       text.className = 'line-text';
       text.textContent = line.text;
+      const insertBtn = document.createElement('button');
+      insertBtn.type = 'button';
+      insertBtn.className = 'insert-line-btn';
+      insertBtn.title = 'Insert a missed line after this one';
+      insertBtn.textContent = '+';
+      insertBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        insertLineAfter(index);
+      });
       li.appendChild(time);
       li.appendChild(text);
+      li.appendChild(insertBtn);
       li.addEventListener('click', () => jumpToLine(index));
       linesList.appendChild(li);
     });

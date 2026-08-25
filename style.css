@@ -233,6 +233,29 @@ textarea {
 .line-text {
   color: var(--text);
   word-break: break-word;
+  flex: 1;
+}
+.insert-line-btn {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #262838;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .1s, background .15s, color .15s;
+}
+.lines-list li:hover .insert-line-btn,
+.insert-line-btn:focus-visible {
+  opacity: 1;
+}
+.insert-line-btn:hover {
+  background: var(--accent);
+  color: #0e0f16;
+  border-color: var(--accent);
 }
 
 .export-panel textarea {
