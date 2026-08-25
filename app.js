@@ -448,6 +448,16 @@
     clockDisplay.textContent = formatTime(syncAudio.currentTime);
   });
 
+  // Clicking the native play/pause button focuses the <audio> element. While
+  // it's genuinely playing AND focused, Chrome handles Space as a built-in
+  // "toggle playback" browser-chrome shortcut *before any DOM event is ever
+  // dispatched* — confirmed by a capture-phase document listener seeing
+  // nothing at all when this fires. That's a level below anything
+  // preventDefault()/stopPropagation() in page JS can intercept (unlike the
+  // in-page shadow-DOM conflict handled above), so the only fix is to never
+  // let the control keep focus in the first place.
+  syncAudio.addEventListener('focus', () => syncAudio.blur());
+
   tapBtn.addEventListener('click', tapCurrentLine);
   undoBtn.addEventListener('click', undoLastTap);
 
