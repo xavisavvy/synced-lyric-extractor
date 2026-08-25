@@ -28,6 +28,13 @@
       <div class="panel">
         <h2>2. Lyrics / markers</h2>
         <p class="hint">One line per entry, in the order they occur in the song. Include non-lyric markers too (e.g. <code>instrumental begins</code>) — whatever you type is exactly what gets exported. Blank lines are ignored.</p>
+        <div id="id3-lyrics-panel" class="id3-panel" style="display:none;">
+          <p class="hint" id="id3-lyrics-summary"></p>
+          <div class="lyrics-actions">
+            <button id="load-uslt-btn" class="btn secondary" style="display:none;">Load embedded lyrics text</button>
+            <button id="load-sylt-btn" class="btn secondary" style="display:none;">Load pre-synced timestamps</button>
+          </div>
+        </div>
         <div class="lyrics-actions">
           <label class="btn secondary" for="lyrics-file-input">Load .txt file&hellip;</label>
           <input type="file" id="lyrics-file-input" accept=".txt,text/plain" style="display:none;" />

@@ -81,6 +81,15 @@ code {
 }
 .file-drop input { display: none; }
 
+.id3-panel {
+  border: 1px solid var(--accent-dim);
+  background: #1a2340;
+  border-radius: 8px;
+  padding: .7rem .8rem .2rem;
+  margin-bottom: .8rem;
+}
+.id3-panel .hint { color: var(--accent); }
+
 textarea {
   width: 100%;
   min-height: 220px;
