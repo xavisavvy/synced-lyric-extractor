@@ -45,8 +45,12 @@
   // ---------------------------------------------------------------------
   function formatTime(totalSeconds) {
     const clamped = Math.max(0, totalSeconds);
-    const minutes = Math.floor(clamped / 60);
-    const seconds = clamped - minutes * 60;
+    // round to whole milliseconds first so the minute/second split can't be
+    // invalidated by toFixed(3) rounding up across a minute boundary
+    // (e.g. 59.9997 -> floor(0/60)=0min + "60.000"s instead of 1min + "00.000"s)
+    const totalMs = Math.round(clamped * 1000);
+    const minutes = Math.floor(totalMs / 60000);
+    const seconds = (totalMs % 60000) / 1000;
     const mm = String(minutes).padStart(2, '0');
     const ss = seconds.toFixed(3).padStart(6, '0');
     return `${mm}:${ss}`;
@@ -203,11 +207,17 @@
   }
 
   function undoLastTap() {
-    // step back to the most recent tagged line and clear it
-    let idx = pointer - 1;
-    if (idx < 0) return;
-    lines[idx].time = null;
-    pointer = idx;
+    // If the pointer is currently sitting on an already-tagged line (e.g. the
+    // user jumped back to re-tag it), clear that one in place. Otherwise fall
+    // back to stepping back to the previous line and clearing it.
+    if (pointer < lines.length && lines[pointer].time !== null) {
+      lines[pointer].time = null;
+    } else if (pointer > 0) {
+      pointer -= 1;
+      lines[pointer].time = null;
+    } else {
+      return;
+    }
     renderLines();
     updateCurrentLineDisplay();
     renderExport();
@@ -228,7 +238,8 @@
       currentLineText.textContent = lines[pointer].text;
       tapBtn.disabled = false;
     }
-    undoBtn.disabled = pointer <= 0 && !(pointer < lines.length && lines[pointer].time !== null);
+    const currentLineIsTagged = pointer < lines.length && lines[pointer].time !== null;
+    undoBtn.disabled = !(currentLineIsTagged || pointer > 0);
   }
 
   function renderLines() {
@@ -254,29 +265,50 @@
 
   // ---------------------------------------------------------------------
   // keyboard shortcuts (ignored while typing in an input/textarea)
+  //
+  // Registered on the CAPTURE phase so this runs before the native <audio
+  // controls> UI gets the event. Once you click that control's play/pause
+  // button it holds keyboard focus, and the browser's own media-controls
+  // handler treats Space as "toggle play" and swallows it (stopping it from
+  // ever reaching a bubble-phase listener) — which is why Space would only
+  // work again after clicking elsewhere on the page. Capturing first, and
+  // stopping propagation ourselves, means the native control never sees it.
   // ---------------------------------------------------------------------
-  document.addEventListener('keydown', (e) => {
-    if (syncView.style.display === 'none') return;
+  const SYNC_KEY_CODES = new Set(['Space', 'Backspace', 'ArrowLeft', 'ArrowRight', 'KeyP']);
+
+  function shouldHandleSyncKey(e) {
+    if (syncView.style.display === 'none') return false;
+    if (!SYNC_KEY_CODES.has(e.code)) return false;
     const tag = document.activeElement ? document.activeElement.tagName : '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    return !(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!shouldHandleSyncKey(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
 
     if (e.code === 'Space') {
-      e.preventDefault();
       tapCurrentLine();
     } else if (e.code === 'Backspace') {
-      e.preventDefault();
       undoLastTap();
     } else if (e.code === 'ArrowLeft') {
-      e.preventDefault();
       seekBy(-1);
     } else if (e.code === 'ArrowRight') {
-      e.preventDefault();
       seekBy(1);
     } else if (e.code === 'KeyP') {
-      e.preventDefault();
       if (syncAudio.paused) syncAudio.play(); else syncAudio.pause();
     }
-  });
+  }, true);
+
+  // Also swallow the matching keyup: the native control activates a
+  // focused button on the Space *keyup* (per the button activation spec),
+  // so blocking only keydown isn't enough to stop it from toggling playback.
+  document.addEventListener('keyup', (e) => {
+    if (!shouldHandleSyncKey(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
 
   // ---------------------------------------------------------------------
   // export
