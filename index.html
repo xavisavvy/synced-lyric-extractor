@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Synced Lyric Extractor</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Synced Lyric Extractor</h1>
+      <p class="subtitle">Load an mp3, load lyrics, tap along to the beat, export timecodes.</p>
+    </header>
+
+    <!-- STEP 1: SETUP -->
+    <section id="setup-view" class="view">
+      <div class="panel">
+        <h2>1. Audio file</h2>
+        <label class="file-drop" for="audio-input">
+          <span id="audio-filename">Click to choose an mp3/wav/audio file&hellip;</span>
+          <input type="file" id="audio-input" accept="audio/*" />
+        </label>
+        <audio id="preview-audio" controls style="display:none;width:100%;margin-top:.5rem;"></audio>
+      </div>
+
+      <div class="panel">
+        <h2>2. Lyrics / markers</h2>
+        <p class="hint">One line per entry, in the order they occur in the song. Include non-lyric markers too (e.g. <code>instrumental begins</code>) — whatever you type is exactly what gets exported. Blank lines are ignored.</p>
+        <div class="lyrics-actions">
+          <label class="btn secondary" for="lyrics-file-input">Load .txt file&hellip;</label>
+          <input type="file" id="lyrics-file-input" accept=".txt,text/plain" style="display:none;" />
+          <button id="clear-lyrics-btn" class="btn secondary">Clear</button>
+        </div>
+        <textarea id="lyrics-input" placeholder="instrumental begins&#10;&quot;High up in the smoke&quot;&#10;&quot;Loot bag on my back&quot;&#10;..."></textarea>
+      </div>
+
+      <div class="panel actions-panel">
+        <button id="start-sync-btn" class="btn primary" disabled>Start syncing &rarr;</button>
+        <span id="setup-error" class="error"></span>
+        <button id="resume-btn" class="btn secondary" style="display:none;">Resume previous session</button>
+      </div>
+    </section>
+
+    <!-- STEP 2: SYNC -->
+    <section id="sync-view" class="view" style="display:none;">
+      <div class="panel player-panel">
+        <audio id="sync-audio" controls></audio>
+        <div class="player-controls">
+          <button id="back5-btn" class="btn secondary" title="Back 5s">&laquo; 5s</button>
+          <button id="back1-btn" class="btn secondary" title="Back 1s">&laquo; 1s</button>
+          <label class="rate-control">
+            Speed
+            <select id="rate-select">
+              <option value="0.5">0.5&times;</option>
+              <option value="0.75">0.75&times;</option>
+              <option value="1" selected>1&times;</option>
+              <option value="1.25">1.25&times;</option>
+            </select>
+          </label>
+          <span class="clock" id="clock-display">00:00.000</span>
+        </div>
+      </div>
+
+      <div class="panel current-line-panel">
+        <div class="current-label">Next line to tag</div>
+        <div id="current-line-text" class="current-line-text">&mdash;</div>
+        <div class="tap-row">
+          <button id="tap-btn" class="btn primary big">Tap (Space)</button>
+          <button id="undo-btn" class="btn secondary">Undo (Backspace)</button>
+        </div>
+        <p class="hint">Click any line below to jump the sync pointer there and re-tag it.</p>
+      </div>
+
+      <div class="panel lines-panel">
+        <h2>Lines</h2>
+        <ol id="lines-list" class="lines-list"></ol>
+      </div>
+
+      <div class="panel actions-panel">
+        <button id="reset-btn" class="btn danger">Reset / edit lyrics</button>
+      </div>
+    </section>
+
+    <!-- STEP 3: EXPORT -->
+    <section id="export-panel" class="panel export-panel" style="display:none;">
+      <h2>3. Export</h2>
+      <textarea id="export-output" readonly></textarea>
+      <div class="export-actions">
+        <button id="copy-btn" class="btn secondary">Copy to clipboard</button>
+        <button id="download-btn" class="btn primary">Download .txt</button>
+        <span id="copy-status" class="copy-status"></span>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
