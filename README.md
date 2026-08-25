@@ -21,20 +21,31 @@ Load a song and a list of lyric/marker lines, tap along in time with the beat, a
 
 ## Prerequisites
 
-None to just open the app — it's plain HTML/CSS/JS with no build step and no dependencies. **Python is only needed if you want to serve the folder over `http://` instead of opening the file directly** (some browsers restrict certain behavior on `file://` pages); the example below uses Python 3's built-in server since it's commonly preinstalled, but any static file server works (e.g. `npx serve`, which needs Node.js instead).
+None — it's plain HTML/CSS/JS with no build step and no dependencies. Nothing below is required just to open the app.
 
 ## Usage
 
-1. Open [`index.html`](index.html) directly in a browser, **or** serve the folder with a local static server if you'd rather use `http://`, e.g.:
+**Option A — try it hosted, zero setup:** https://xavisavvy.github.io/synced-lyric-extractor/
 
-   ```bash
-   python -m http.server 8420
-   ```
+**Option B — open the file directly:** double-click [`index.html`](index.html), or open it via your browser's File → Open.
 
-   then visit `http://localhost:8420`.
-2. Choose an audio file and enter your lyric/marker lines (one per line — whatever you type is exactly what gets exported).
-3. Click **Start syncing**, play the track, and tap Space in time with each line.
-4. Copy or download the result from the export panel.
+**Option C — serve it over `http://` instead of `file://`** (occasionally useful, since some browsers restrict certain behavior on `file://` pages). Pick whichever of these you already have installed — any one is enough, no need for more than one:
+
+| Tool | Command |
+|---|---|
+| Python 3 | `python -m http.server 8420` |
+| Node.js | `npx serve -l 8420` (or `npx http-server -p 8420`) |
+| PHP | `php -S localhost:8420` |
+| Ruby | `ruby -run -e httpd . -p 8420` |
+| VS Code | install the "Live Server" extension, then right-click `index.html` → **Open with Live Server** |
+
+Then visit `http://localhost:8420` (or whatever port/URL the tool prints).
+
+Once it's open, however you got there:
+
+1. Choose an audio file and enter your lyric/marker lines (one per line — whatever you type is exactly what gets exported).
+2. Click **Start syncing**, play the track, and tap Space in time with each line.
+3. Copy or download the result from the export panel.
 
 ## How it works
 
