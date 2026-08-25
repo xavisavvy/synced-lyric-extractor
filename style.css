@@ -36,6 +36,21 @@ body {
   color: var(--text-dim);
 }
 
+.site-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  color: var(--text-dim);
+  font-size: .85rem;
+}
+.site-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
 .panel {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
