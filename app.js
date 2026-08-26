@@ -67,6 +67,10 @@
   const lyricVideoArt = document.getElementById('lyric-video-art');
   const lyricVideoLyrics = document.getElementById('lyric-video-lyrics');
   const lvPlayBtn = document.getElementById('lv-play-btn');
+  // Belt-and-suspenders: guarantee the overlay starts hidden regardless of
+  // markup, cache, or any extension that might force display:none elements
+  // visible for its own inspection purposes.
+  lyricVideoOverlay.style.display = 'none';
   const lvSeek = document.getElementById('lv-seek');
   const lvTimeCurrent = document.getElementById('lv-time-current');
   const lvTimeTotal = document.getElementById('lv-time-total');
