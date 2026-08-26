@@ -769,8 +769,8 @@
       copyStatus.textContent = 'Copied!';
     } catch (e) {
       exportOutput.select();
-      document.execCommand('copy');
-      copyStatus.textContent = 'Copied!';
+      const fallbackOk = document.execCommand('copy');
+      copyStatus.textContent = fallbackOk ? 'Copied!' : 'Copy failed — select the text and copy manually.';
     }
     setTimeout(() => { copyStatus.textContent = ''; }, 2000);
   });
@@ -784,7 +784,9 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Deferred rather than immediate: some WebKit/Blink versions can abort an
+    // in-flight download if the blob URL is revoked the instant click() returns.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
   // ---------------------------------------------------------------------
@@ -983,7 +985,8 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Deferred rather than immediate — see the same note on the .txt download.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } finally {
       exportStoryboarderBtn.disabled = false;
       exportStoryboarderBtn.textContent = originalLabel;
