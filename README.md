@@ -10,6 +10,8 @@ Load a song and a list of lyric/marker lines, tap along in time with the beat, a
 00:18.200 — "Loot bag on my back"
 ```
 
+![Tapping lyric lines to a song's timing, with the tagged timecodes list and export panel visible](docs/screenshot.png)
+
 ## Features
 
 - **Tap-to-sync** — play the track and hit Space in time with each line; Backspace undoes the last tap.
