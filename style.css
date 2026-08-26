@@ -13,6 +13,14 @@
 
 * { box-sizing: border-box; }
 
+/* Initial/toggled visibility MUST go through this class, never an inline
+   style="display:none" attribute or a JS .style.display assignment — the
+   page's CSP (style-src 'self', no unsafe-inline) silently blocks inline
+   style attributes from ever applying, which would otherwise leave the
+   element visibly rendered regardless of what the markup says. classList
+   operations are unaffected by that restriction. */
+.hidden { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -108,6 +116,11 @@ code {
   color: var(--text);
 }
 .file-drop input { display: none; }
+
+#preview-audio {
+  width: 100%;
+  margin-top: .5rem;
+}
 
 .id3-panel {
   border: 1px solid var(--accent-dim);

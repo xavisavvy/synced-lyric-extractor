@@ -23,22 +23,22 @@
           <span id="audio-filename">Click to choose an mp3/wav/audio file&hellip;</span>
           <input type="file" id="audio-input" accept="audio/*" />
         </label>
-        <audio id="preview-audio" controls style="display:none;width:100%;margin-top:.5rem;"></audio>
+        <audio id="preview-audio" class="hidden" controls></audio>
       </div>
 
       <div class="panel">
         <h2>2. Lyrics / markers</h2>
         <p class="hint">One line per entry, in the order they occur in the song. Include non-lyric markers too (e.g. <code>instrumental begins</code>) — whatever you type is exactly what gets exported. Blank lines are ignored.</p>
-        <div id="id3-lyrics-panel" class="id3-panel" style="display:none;">
+        <div id="id3-lyrics-panel" class="id3-panel hidden">
           <p class="hint" id="id3-lyrics-summary"></p>
           <div class="lyrics-actions">
-            <button id="load-uslt-btn" class="btn secondary" style="display:none;">Load embedded lyrics text</button>
-            <button id="load-sylt-btn" class="btn secondary" style="display:none;">Load pre-synced timestamps</button>
+            <button id="load-uslt-btn" class="btn secondary hidden">Load embedded lyrics text</button>
+            <button id="load-sylt-btn" class="btn secondary hidden">Load pre-synced timestamps</button>
           </div>
         </div>
         <div class="lyrics-actions">
           <label class="btn secondary" for="lyrics-file-input">Load .txt file&hellip;</label>
-          <input type="file" id="lyrics-file-input" accept=".txt,text/plain" style="display:none;" />
+          <input type="file" id="lyrics-file-input" accept=".txt,text/plain" class="hidden" />
           <button id="clear-lyrics-btn" class="btn secondary">Clear</button>
         </div>
         <textarea id="lyrics-input" placeholder="instrumental begins&#10;&quot;High up in the smoke&quot;&#10;&quot;Loot bag on my back&quot;&#10;..."></textarea>
@@ -47,12 +47,12 @@
       <div class="panel actions-panel">
         <button id="start-sync-btn" class="btn primary" disabled>Start syncing &rarr;</button>
         <span id="setup-error" class="error"></span>
-        <button id="resume-btn" class="btn secondary" style="display:none;">Resume previous session</button>
+        <button id="resume-btn" class="btn secondary hidden">Resume previous session</button>
       </div>
     </section>
 
     <!-- STEP 2: SYNC -->
-    <section id="sync-view" class="view" style="display:none;">
+    <section id="sync-view" class="view hidden">
       <div class="panel player-panel">
         <audio id="sync-audio" controls></audio>
         <div class="player-controls">
@@ -93,7 +93,7 @@
     </section>
 
     <!-- STEP 3: EXPORT -->
-    <section id="export-panel" class="panel export-panel" style="display:none;">
+    <section id="export-panel" class="panel export-panel hidden">
       <h2>3. Export</h2>
       <textarea id="export-output" readonly></textarea>
       <div class="export-actions">
@@ -112,12 +112,12 @@
     </footer>
   </div>
 
-  <div id="lyric-video-overlay" class="lyric-video-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Fullscreen lyric view">
+  <div id="lyric-video-overlay" class="lyric-video-overlay hidden" role="dialog" aria-modal="true" aria-label="Fullscreen lyric view">
     <button id="close-lyric-video-btn" class="lyric-video-close" title="Close (Esc)" aria-label="Close">&times;</button>
     <div class="lyric-video-stage">
       <div class="lyric-video-art-col">
         <div class="lyric-video-art" id="lyric-video-art">
-          <img id="lyric-video-cover-img" class="lyric-video-cover-img" alt="" style="display:none;" />
+          <img id="lyric-video-cover-img" class="lyric-video-cover-img hidden" alt="" />
           <div class="lyric-video-art-fallback" id="lyric-video-art-fallback">
             <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
           </div>

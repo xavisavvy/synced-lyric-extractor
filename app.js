@@ -68,9 +68,11 @@
   const lyricVideoLyrics = document.getElementById('lyric-video-lyrics');
   const lvPlayBtn = document.getElementById('lv-play-btn');
   // Belt-and-suspenders: guarantee the overlay starts hidden regardless of
-  // markup, cache, or any extension that might force display:none elements
-  // visible for its own inspection purposes.
-  lyricVideoOverlay.style.display = 'none';
+  // markup or cache. (The real bug this used to mask: the page's CSP blocks
+  // inline style="display:none" attributes from ever applying at all, which
+  // is why every hidden-by-default element now uses the .hidden CSS class
+  // instead — classList operations aren't affected by that restriction.)
+  lyricVideoOverlay.classList.add('hidden');
   const lvSeek = document.getElementById('lv-seek');
   const lvTimeCurrent = document.getElementById('lv-time-current');
   const lvTimeTotal = document.getElementById('lv-time-total');
@@ -294,9 +296,9 @@
     if (!parts.length) return; // e.g. only an unusable MPEG-frame-timed SYLT
 
     id3Summary.textContent = `Found embedded lyrics in this file (${parts.join(' and ')}).`;
-    loadUsltBtn.style.display = result.uslt.length ? 'inline-block' : 'none';
-    loadSyltBtn.style.display = result.usableSylt.length ? 'inline-block' : 'none';
-    id3Panel.style.display = 'block';
+    loadUsltBtn.classList.toggle('hidden', !result.uslt.length);
+    loadSyltBtn.classList.toggle('hidden', !result.usableSylt.length);
+    id3Panel.classList.remove('hidden');
   }
 
   loadUsltBtn.addEventListener('click', () => {
@@ -335,7 +337,7 @@
     if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
     audioObjectUrl = URL.createObjectURL(file);
     previewAudio.src = audioObjectUrl;
-    previewAudio.style.display = 'block';
+    previewAudio.classList.remove('hidden');
     audioFilename.textContent = file.name;
     updateStartButton();
 
@@ -347,7 +349,7 @@
     }
 
     detectedLyrics = null;
-    id3Panel.style.display = 'none';
+    id3Panel.classList.add('hidden');
     if (coverArtUrl) { URL.revokeObjectURL(coverArtUrl); coverArtUrl = null; }
     trackTitle = null;
     trackArtist = null;
@@ -460,7 +462,7 @@
     setupError.textContent = pendingResumeHint
       ? `Session restored — choose "${pendingResumeHint.name}" again, then click "Start syncing".`
       : 'Session restored — choose the same audio file again, then click "Start syncing".';
-    resumeBtn.style.display = 'none';
+    resumeBtn.classList.add('hidden');
   });
 
   // ---------------------------------------------------------------------
@@ -487,16 +489,16 @@
 
   (function checkForResumableSession() {
     const saved = loadSession();
-    if (saved) resumeBtn.style.display = 'inline-block';
+    if (saved) resumeBtn.classList.remove('hidden');
   })();
 
   // ---------------------------------------------------------------------
   // sync view
   // ---------------------------------------------------------------------
   function enterSyncView() {
-    setupView.style.display = 'none';
-    syncView.style.display = 'block';
-    exportPanel.style.display = 'block';
+    setupView.classList.add('hidden');
+    syncView.classList.remove('hidden');
+    exportPanel.classList.remove('hidden');
     undoStack = [];
     redoStack = [];
     renderLines();
@@ -505,10 +507,16 @@
   }
 
   function exitToSetup() {
-    syncView.style.display = 'none';
-    exportPanel.style.display = 'none';
-    setupView.style.display = 'block';
-    resumeBtn.style.display = 'none';
+    // `lines` is the authoritative, up-to-date text at this point — it may
+    // include lines inserted or re-tagged during the sync session that were
+    // never written back to the textarea. Resync it here so Start syncing's
+    // reconcile (which only ever sees lyricsInput.value) can't silently drop
+    // them as "removed" simply because the textarea never caught up.
+    lyricsInput.value = lines.map((l) => l.text).join('\n');
+    syncView.classList.add('hidden');
+    exportPanel.classList.add('hidden');
+    setupView.classList.remove('hidden');
+    resumeBtn.classList.add('hidden');
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
   }
 
@@ -591,7 +599,14 @@
     if (pointer >= lines.length) return;
     pushHistory();
     lines[pointer].time = syncAudio.currentTime;
-    pointer = Math.min(pointer + 1, lines.length);
+    // Advance to the next UNTAGGED line, not just pointer+1: after editing
+    // lyrics mid-session, reconcileLines() can leave the pointer sitting on
+    // an untagged "hole" with already-correctly-tagged lines still ahead of
+    // it. Blindly moving one step forward would make the very next tap
+    // silently overwrite one of those already-good timestamps.
+    let next = pointer + 1;
+    while (next < lines.length && lines[next].time !== null) next++;
+    pointer = next;
     renderLines();
     updateCurrentLineDisplay();
     renderExport();
@@ -704,7 +719,7 @@
   const SYNC_KEY_CODES = new Set(['Space', 'Backspace', 'ArrowLeft', 'ArrowRight', 'KeyP', 'KeyZ', 'KeyY']);
 
   function shouldHandleSyncKey(e) {
-    if (syncView.style.display === 'none') return false;
+    if (syncView.classList.contains('hidden')) return false;
     if (lyricVideoOpen) return false; // the lyric-video overlay owns keyboard input while open
     if (!SYNC_KEY_CODES.has(e.code)) return false;
     const tag = document.activeElement ? document.activeElement.tagName : '';
@@ -1079,22 +1094,22 @@
 
     if (coverArtUrl) {
       lyricVideoCoverImg.src = coverArtUrl;
-      lyricVideoCoverImg.style.display = 'block';
-      lyricVideoArtFallback.style.display = 'none';
+      lyricVideoCoverImg.classList.remove('hidden');
+      lyricVideoArtFallback.classList.add('hidden');
       lyricVideoCoverImg.onload = () => {
         const tint = extractDominantColor(lyricVideoCoverImg);
         lyricVideoOverlay.style.setProperty('--lv-tint', tint || '#7c9bff');
       };
     } else {
-      lyricVideoCoverImg.style.display = 'none';
-      lyricVideoArtFallback.style.display = 'flex';
+      lyricVideoCoverImg.classList.add('hidden');
+      lyricVideoArtFallback.classList.remove('hidden');
       lyricVideoOverlay.style.setProperty('--lv-tint', '#7c9bff');
     }
 
     const file = audioInput.files[0];
     lyricVideoTitleEl.textContent = trackTitle || (file ? file.name.replace(/\.[^.]+$/, '') : 'Untitled');
     lyricVideoArtistEl.textContent = trackArtist || '';
-    lyricVideoArtistEl.style.display = trackArtist ? 'block' : 'none';
+    lyricVideoArtistEl.classList.toggle('hidden', !trackArtist);
 
     const dur = syncAudio.duration;
     lvSeek.max = String(Number.isFinite(dur) ? Math.round(dur * 1000) : 1000);
@@ -1104,13 +1119,13 @@
     updateLvPlayIcon();
     updateLyricVideoActiveLine();
 
-    lyricVideoOverlay.style.display = 'flex';
+    lyricVideoOverlay.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
     lyricVideoOpen = true;
   }
 
   function closeLyricVideo() {
-    lyricVideoOverlay.style.display = 'none';
+    lyricVideoOverlay.classList.add('hidden');
     document.body.style.overflow = '';
     lyricVideoOpen = false;
     syncAudio.pause();
